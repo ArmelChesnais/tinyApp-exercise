@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <% //include ./partials/_head %>
+  </head>
+  <body class="container">
+      <header>
+          <% include ./partials/_header %>
+      </header>
+
+    <ul>
+      <% for (var key in urls) { %>
+      <li><a href="/urls/<%= key %>"><%= key %></a>: <a href="<%= urls[key] %>"><%= urls[key] %></a></li>
+
+      <% } %>
+    </ul>
+    <a href="#">shorten URL</a>
+
+    <footer>
+        <% //include ./partials/_footer %>
+    </footer>
+  </body>
+</html>
