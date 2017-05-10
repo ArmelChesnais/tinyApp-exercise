@@ -7,5 +7,9 @@ function genRandStringLength(size) {
   return result;
 }
 
-console.log(genRandStringLength(6));
+console.log(genRand());
+
+function genRand() {
+  return Math.random().toString(36);
+}
 
