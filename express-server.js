@@ -45,7 +45,7 @@ app.get("/urls/new", (req, res) => {
 
 app.get("/urls/:id", (req, res) => {
   if ( !urlDatabase[req.params.id] ){
-    res.sendStatus(404)
+    res.sendStatus(404);
   } else {
     let templateVars = {
       shortURL: req.params.id,
@@ -58,15 +58,23 @@ app.get("/urls/:id", (req, res) => {
 
 app.post("/urls/:id/delete", (req, res) => {
   if ( !urlDatabase[req.params.id] ){
-    res.sendStatus(404)
+    res.sendStatus(404);
   } else {
     delete urlDatabase[req.params.id];
     res.redirect("/urls");
   }
 });
 
+app.post("/urls/:id", (req, res) => {
+  if ( !urlDatabase[req.params.id] ){
+    res.sendStatus(404);
+  } else {
+    urlDatabase[req.params.id] = req.body.longURL;
+    res.redirect("/urls");
+  }
+});
+
 app.post("/urls", (req, res) => {
-  console.log(req.body);
   let shortURL = generateRandomString();
   urlDatabase[shortURL] = req.body.longURL;
   res.location("/urls/" + shortURL);
