@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <% include ./partials/_head %>
+</head>
+<body class="container">
+  <% include ./partials/_navbar %>
+  <form method="POST" action="/login" class="col-sm-6">
+    <div class="form-group">
+      <input type="text" class="form-control" name="email" placeholder="E-mail">
+    </div>
+    <div class="form-group">
+      <input type="password" class="form-control" name="password" placeholder="Password">
+    </div>
+    <button type="submit" class="btn btn-default">Log In</button>
+  </form>
+  <% include ./partials/_footer %>
+</body>
+</html>

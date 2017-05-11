@@ -13,7 +13,7 @@
           <tr>
             <td><%= key %></td>
             <td> → <a href="<%= urls[key] %>"><%= urls[key] %></a></td>
-            <td><a href="/urls/<%= key %>">Edit</a></td>
+            <td><a class="btn btn-default" href="/urls/<%= key %>">Edit</a></td>
             <td><form class="delete-button" method="POST" action="/urls/<%= key %>/delete">
               <button type="submit" name="delete" value="delete" class="btn btn-default">Delete <img src="/icon/trash.png" width="18px"> </button>
             </form></td>
@@ -25,7 +25,7 @@
     <div class="container">
       <a class="btn btn-default" href="/urls/new">shorten URL</a>
     </div>
-    <% //include ./partials/_footer %>
+    <% include ./partials/_footer %>
   </div>
 </body>
 </html>
