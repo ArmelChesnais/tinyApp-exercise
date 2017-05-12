@@ -1,10 +1,14 @@
+/*** REQUIREMENTS ***/
+
 const express = require("express");
 const bodyParser = require("body-parser");
-const cookieParser = require("cookie-parser")
+const cookieParser = require("cookie-parser");
+const bcrypt = require("bcrypt");
 const fs = require("fs");
 
-var app = express();
+const app = express();
 const PORT = process.env.PORT || 8080;
+const HASHROUNDS = process.env.HASHROUNDS || 10;
 
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({extended: true}));
@@ -24,12 +28,12 @@ const users = {
   "userRandomID": {
     id: "userRandomID",
     email: "user@example.com",
-    password: "purple-monkey-dinosaur"
+    password: bcrypt.hashSync("purple-monkey-dinosaur", HASHROUNDS)
   },
  "user2RandomID": {
     id: "user2RandomID",
     email: "user2@example.com",
-    password: "dishwasher-funk"
+    password: bcrypt.hashSync("dishwasher-funk", HASHROUNDS)
   }
 }
 
@@ -109,13 +113,13 @@ app.post("/urls/:id/delete", (req, res) => {
     res.sendStatus(404);
   } else {
     if ( !utils.isLoggedIn(req.cookies.user_id)){
-      res.status(401);
+      res.sendStatus(401);
     } else if ( utils.ownsURL(req.cookies.user_id, req.params.id) ) {
       delete urlDatabase[req.params.id];
+      res.redirect("/urls");
     } else {
-      res.status(403);
+      res.sendStatus(403);
     }
-    res.redirect("/urls", insertUser(req));
   }
 });
 
@@ -145,7 +149,6 @@ app.post('/urls', (req, res) => {
 });
 
 app.post("/login", (req, res) => {
-  console.log(req.body);
   loginUser( res, req.body.email, req.body.password );
   res.redirect('/urls');
 });
@@ -158,7 +161,7 @@ app.post("/register", (req, res) => {
   } else if ( utils.emailExists(email) ) {
     res.sendStatus(400);
   } else {
-    let id = addUser(email, password);
+    let id = addUser( email, password );
     res.cookie('user_id', id);
     res.redirect('/urls');
   }
@@ -167,14 +170,6 @@ app.post("/register", (req, res) => {
 app.post("/logout", (req, res) => {
   res.clearCookie('user_id');
   res.redirect('/urls');
-});
-
-
-
-/*** START SERVER ***/
-
-app.listen(PORT, () => {
-  console.log(`example app listening on port: ${PORT}!`);
 });
 
 
@@ -219,10 +214,11 @@ function addUser( email, password ){
   do {
     id = generateRandomString();
   } while (users[id]);
+
   users[id] = {
     id: id,
     email: email,
-    password: password
+    password: bcrypt.hashSync(password, HASHROUNDS)
   }
   return id;
 }
@@ -257,7 +253,12 @@ function loginUser( res, email, password ) {
 }
 
 function authUser( email, password ) {
-  return utils.emailExists(email);
+  let id = utils.emailExists(email)
+  if( id && bcrypt.compareSync(password, users[id].password) ) {
+    return id;
+  } else {
+    return false;
+  }
 }
 
 /*** TRANSFERRABLE FUNCTIONS ***/
@@ -287,15 +288,16 @@ const utils = {
   },
 
   getEmail: function( user_id ) {
-    return users
+    return users[user_id].email;
   },
 
   authUser: function( email, password ) {
-    let user_id = this.getUserId(email);
-    if ( users[user_id] && users[user_id].password === password) {
-      return user_id;
+    let id = utils.emailExists(email)
+    if( id && bcrypt.compareSync(password, users[id].password) ) {
+      return id;
+    } else {
+      return false;
     }
-    return false;
   },
 
   getLongURL: function( shortURL ) {
@@ -303,16 +305,20 @@ const utils = {
   },
 
   getOwner: function( shortURL ) {
-    console.log("urldatabase[short]", urlDatabase[shortURL]);
-    console.log("urlDatabase", urlDatabase);
     return urlDatabase[shortURL].user_id;
   },
 
   ownsURL: function ( user_id, shortURL ) {
-    console.log("shirtURL:", shortURL);
     if ( this.getOwner( shortURL ) === user_id) {
       return user_id;
     }
     return false;
   }
 }
+
+
+/*** START SERVER ***/
+
+app.listen(PORT, () => {
+  console.log(`example app listening on port: ${PORT}!`);
+});
