@@ -43,6 +43,14 @@ const users = {
   }
 }
 
+const errors = {
+  "400": "Bad request. Please verify the information provided is full and correct",
+  "1400": "Bad request. E-mail is already registered",
+  "401": "You are not authenticated, please <a href=\"/login\">log in</a> or <a href=\"/register\">register</a>.",
+  "403": "You are not authorized to access this page.",
+  "404": "Page not found."
+}
+
 
 /*** VIEWS/PROCESSING ***/
 
@@ -50,48 +58,73 @@ const users = {
 /*** GET ENDPOINTS ***/
 
 app.get("/", (req, res) => {
-  res.redirect("/urls");
+  if( utils.isLoggedIn(req.session.user_id) ) {
+    res.redirect("/urls"); // root directs to URL page if logged in
+  } else {
+    res.redirect("/login"); // to login page if not.
+  }
 });
 
 app.get("/icon/:file", (req,res) => {
+  // manage icon requests by directing to system location
   let path = "./assets/icons/" + req.params.file;
   if (fs.existsSync(path) ) {
     fs.readFile(path, (err, data) => {
       res.setHeader("Content-Type", "image/png");
       res.send(data);
-    })
+      // if file found, send file data as png.
+    });
+  } else {
+    renderError(404, req, res); // if not found, send 404 status
   }
 });
 
 app.get("/urls.json", (req, res) => {
-  res.json(urlDatabase);
+  res.json(urlDatabase); // provide JSON for urlDatabase API
 });
 
 app.get("/urls", (req, res) => {
+
+  // set values to pass to the view, and ensure user info is included.
   let templateVars = { urls: urlDatabase };
   res.render("urls_index", insertUser(req, templateVars));
 });
 
 app.get("/urls/new", (req, res) => {
+  // direct logged in users to create new URL. Send unauthorized code if not logged in.
   if ( utils.isLoggedIn(req.session.user_id) ) {
     res.render("urls_new", insertUser(req));
   } else {
-    res.status(403).redirect("/urls");
+    res.status(401).redirect("/login");
   }
 });
 
 app.get("/register", (req, res) => {
-  res.render("register", insertUser(req));
+  if ( utils.isLoggedIn(req.session.user_id) ) {
+    res.redirect("/urls");
+  } else {
+    res.render("register", insertUser(req));
+  }
 });
 
 app.get("/login", (req, res) => {
-  res.render("login", insertUser(req));
+  if ( utils.isLoggedIn(req.session.user_id) ) {
+    res.redirect("/urls");
+  } else {
+    res.render("login", insertUser(req));
+  }
 });
 
 app.get("/urls/:id", (req, res) => {
+  // check if URL entry exists, if not, send 404 code.
   if ( !urlDatabase[req.params.id] ){
-    res.sendStatus(404);
+    renderError(404, req, res);
+  } else if ( !utils.isLoggedIn(req.session.user_id) ) {
+    renderError(401, req, res);
+  } else if ( !utils.ownsURL(req.session.user_id, req.params.id) ) {
+    renderError(403, req, res);
   } else {
+    // if it does, send to URL edit view, pass relevant variables, and ensure user info is included.
     let templateVars = {
       urls: urlDatabase,
       shortURL: req.params.id,
@@ -101,13 +134,15 @@ app.get("/urls/:id", (req, res) => {
   }
 });
 
-app.get("/u/:shortURL", (req, res) => {
-  let longURL = utils.getLongURL(req.params.shortURL);
-  res.redirect(longURL);
-});
-
-app.get("/hello", (req, res) => {
-  res.end("<html><body> Hello <b>World</b></body></html>")
+app.get("/u/:id", (req, res) => {
+  // check if URL entry exists, if not, send 404 code.
+  if ( !urlDatabase[req.params.id] ){
+    renderError(404, req, res);
+  } else {
+    // if it does
+    let longURL = utils.getLongURL(req.params.id);
+    res.redirect(longURL);
+  }
 });
 
 
@@ -116,56 +151,54 @@ app.get("/hello", (req, res) => {
 
 app.post("/urls/:id/delete", (req, res) => {
   if ( !urlDatabase[req.params.id] ){
-    res.sendStatus(404);
+    renderError(404, req, res);
+  } else if ( !utils.isLoggedIn(req.session.user_id)){
+    renderError(401, req, res);
+  } else if ( utils.ownsURL(req.session.user_id, req.params.id) ) {
+    delete urlDatabase[req.params.id];
+    res.redirect("/urls");
   } else {
-    if ( !utils.isLoggedIn(req.session.user_id)){
-      res.sendStatus(401);
-    } else if ( utils.ownsURL(req.session.user_id, req.params.id) ) {
-      delete urlDatabase[req.params.id];
-      res.redirect("/urls");
-    } else {
-      res.sendStatus(403);
-    }
+    renderError(403, req, res);
   }
 });
 
 app.post("/urls/:id", (req, res) => {
   if ( !urlDatabase[req.params.id] ){
-    res.sendStatus(404);
-  } else {
-    if ( !utils.isLoggedIn(req.session.user_id)){
-      res.status(401);
-    } else if ( utils.ownsURL(req.session.user_id, req.params.id) ) {
-      setURL(req.params.id, req.body.longURL);
-    } else {
-      res.status(403);
-    }
+    renderError(404, req, res);
+  } else if ( !utils.isLoggedIn(req.session.user_id)){
+    renderError(401, req, res);
+  } else if ( utils.ownsURL(req.session.user_id, req.params.id) ) {
+    setURL(req.params.id, req.body.longURL);
     res.redirect("/urls");
+  } else {
+    renderError(403, req, res);
   }
 });
 
 app.post('/urls', (req, res) => {
-  //let shortURL = generateRandomString();
   if( utils.isLoggedIn(req.session.user_id) ) {
-    res.location('/urls/' + addURL(req, req.session.user_id));
+    res.location( '/urls/' + addURL(req, req.session.user_id) );
     res.status(303).send('Redirecting to short URL');
   } else {
-    res.sendStatus(401);
+    renderError(401, req, res);
   }
 });
 
 app.post("/login", (req, res) => {
-  loginUser( req, res /*req.body.email, req.body.password*/ );
-  res.redirect('/urls');
+  if ( loginUser( req, res ) ) {
+    res.redirect('/urls');
+  } else {
+    renderError(400, req, res);
+  };
 });
 
 app.post("/register", (req, res) => {
   let email = req.body.email;
   let password = req.body.password;
-  if ( !email || !password) {
-    res.sendStatus(400);
+  if ( !email || !password ) {
+    renderError(400, req, res);
   } else if ( utils.emailExists(email) ) {
-    res.sendStatus(400);
+    renderError(1400, req, res);
   } else {
     let id = addUser( email, password );
     req.session.user_id = id;
@@ -194,6 +227,21 @@ function setURL ( shortURL, longURL ) {
 
 function generateRandomString() {
    return genRandStringLength(6);
+}
+
+function renderError( statusCode, req, res ) {
+  let formattedCode = statusCode % 1000;
+  if ( errors[statusCode]) {
+    res.status(formattedCode);
+    let templateVars = {
+      urls: urlDatabase,
+      host: req.hostname,
+      error: { code: formattedCode, text: errors[statusCode] }
+    };
+    res.render("error", insertUser(req, templateVars));
+  } else {
+    res.sendStatus(formattedCode);
+  }
 }
 
 function genRandStringLength(size) {
@@ -229,25 +277,25 @@ function addUser( email, password ){
   return id;
 }
 
-function isLoggedIn ( req ) {
-  if ( req.session.user_id ) {
-    let user_id = req.coo
-    if ( users[user_id] ) {
-      return user_id;
-    }
-  }
-  return false
-}
+// function isLoggedIn ( req ) {
+//   if ( req.session.user_id ) {
+//     let user_id = req.coo
+//     if ( users[user_id] ) {
+//       return user_id;
+//     }
+//   }
+//   return false
+// }
 
-function emailExists( email ) {
-  let keys = Object.keys(users);
-  for ( let i = 0; i < keys.length; i++) {
-    if ( users[keys[i]].email === email ) {
-      return keys[i];
-    }
-  }
-  return false;
-}
+// function emailExists( email ) {
+//   let keys = Object.keys(users);
+//   for ( let i = 0; i < keys.length; i++) {
+//     if ( users[keys[i]].email === email ) {
+//       return keys[i];
+//     }
+//   }
+//   return false;
+// }
 
 function loginUser( req, res ) {
   let id = utils.authUser( req.body.email, req.body.password );
@@ -256,16 +304,17 @@ function loginUser( req, res ) {
   } else {
     res.status(400);
   }
+  return id;
 }
 
-function authUser( email, password ) {
-  let id = utils.emailExists(email)
-  if( id && bcrypt.compareSync(password, users[id].password) ) {
-    return id;
-  } else {
-    return false;
-  }
-}
+// function authUser( email, password ) {
+//   let id = utils.emailExists(email)
+//   if( id && bcrypt.compareSync(password, users[id].password) ) {
+//     return id;
+//   } else {
+//     return false;
+//   }
+// }
 
 /*** TRANSFERRABLE FUNCTIONS ***/
 const utils = {
@@ -281,7 +330,6 @@ const utils = {
 
   emailExists: function( email ) {
     let keys = Object.keys(users);
-    // console.log("users during email exists:", users);
     for ( let i = 0; i < keys.length; i++) {
       if ( users[keys[i]].email === email ) {
         return keys[i];

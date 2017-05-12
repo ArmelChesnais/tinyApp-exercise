@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <% include ./partials/_head %>
+</head>
+<body class="container">
+  <% include ./partials/_navbar %>
+  <div class="container col-sm-6">
+    <p><%- error.code %>: <%- error.text %>
+  </div>
+  <% include ./partials/_footer %>
+</body>
+</html>
