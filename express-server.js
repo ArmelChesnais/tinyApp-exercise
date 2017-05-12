@@ -2,17 +2,23 @@
 
 const express = require("express");
 const bodyParser = require("body-parser");
-const cookieParser = require("cookie-parser");
+const cookieSession = require("cookie-session");
 const bcrypt = require("bcrypt");
 const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-const HASHROUNDS = process.env.HASHROUNDS || 10;
+const HASHROUNDS = 10;
 
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({extended: true}));
-app.use(cookieParser());
+app.use(cookieSession({
+  name: 'session',
+  keys: ['SuperTotallySecretKey1', 'AnotherReallySecretKey2'], // Secret keys
+
+  // Cookie options
+  maxAge: 24 * 60 * 60 * 1000 // 24 hours
+}));
 
 
 
@@ -67,7 +73,7 @@ app.get("/urls", (req, res) => {
 });
 
 app.get("/urls/new", (req, res) => {
-  if ( utils.isLoggedIn(req.cookies.user_id) ) {
+  if ( utils.isLoggedIn(req.session.user_id) ) {
     res.render("urls_new", insertUser(req));
   } else {
     res.status(403).redirect("/urls");
@@ -112,9 +118,9 @@ app.post("/urls/:id/delete", (req, res) => {
   if ( !urlDatabase[req.params.id] ){
     res.sendStatus(404);
   } else {
-    if ( !utils.isLoggedIn(req.cookies.user_id)){
+    if ( !utils.isLoggedIn(req.session.user_id)){
       res.sendStatus(401);
-    } else if ( utils.ownsURL(req.cookies.user_id, req.params.id) ) {
+    } else if ( utils.ownsURL(req.session.user_id, req.params.id) ) {
       delete urlDatabase[req.params.id];
       res.redirect("/urls");
     } else {
@@ -127,9 +133,9 @@ app.post("/urls/:id", (req, res) => {
   if ( !urlDatabase[req.params.id] ){
     res.sendStatus(404);
   } else {
-    if ( !utils.isLoggedIn(req.cookies.user_id)){
+    if ( !utils.isLoggedIn(req.session.user_id)){
       res.status(401);
-    } else if ( utils.ownsURL(req.cookies.user_id, req.params.id) ) {
+    } else if ( utils.ownsURL(req.session.user_id, req.params.id) ) {
       setURL(req.params.id, req.body.longURL);
     } else {
       res.status(403);
@@ -140,8 +146,8 @@ app.post("/urls/:id", (req, res) => {
 
 app.post('/urls', (req, res) => {
   //let shortURL = generateRandomString();
-  if( utils.isLoggedIn(req.cookies.user_id) ) {
-    res.location('/urls/' + addURL(req, req.cookies.user_id));
+  if( utils.isLoggedIn(req.session.user_id) ) {
+    res.location('/urls/' + addURL(req, req.session.user_id));
     res.status(303).send('Redirecting to short URL');
   } else {
     res.sendStatus(401);
@@ -149,7 +155,7 @@ app.post('/urls', (req, res) => {
 });
 
 app.post("/login", (req, res) => {
-  loginUser( res, req.body.email, req.body.password );
+  loginUser( req, res /*req.body.email, req.body.password*/ );
   res.redirect('/urls');
 });
 
@@ -162,13 +168,13 @@ app.post("/register", (req, res) => {
     res.sendStatus(400);
   } else {
     let id = addUser( email, password );
-    res.cookie('user_id', id);
+    req.session.user_id = id;
     res.redirect('/urls');
   }
 });
 
 app.post("/logout", (req, res) => {
-  res.clearCookie('user_id');
+  req.session = null;
   res.redirect('/urls');
 });
 
@@ -204,7 +210,7 @@ function insertUser( req, input ){
   if (input) {
     result = input;
   }
-  result["user"] = users[req.cookies.user_id];
+  result["user"] = users[req.session.user_id];
   result["utils"] = utils;
   return result;
 }
@@ -224,7 +230,7 @@ function addUser( email, password ){
 }
 
 function isLoggedIn ( req ) {
-  if ( req.cookies.user_id ) {
+  if ( req.session.user_id ) {
     let user_id = req.coo
     if ( users[user_id] ) {
       return user_id;
@@ -243,10 +249,10 @@ function emailExists( email ) {
   return false;
 }
 
-function loginUser( res, email, password ) {
-  let id = utils.authUser( email, password );
+function loginUser( req, res ) {
+  let id = utils.authUser( req.body.email, req.body.password );
   if( id ) {
-    res.cookie('user_id', id);
+    req.session.user_id = id;
   } else {
     res.status(400);
   }
@@ -275,6 +281,7 @@ const utils = {
 
   emailExists: function( email ) {
     let keys = Object.keys(users);
+    // console.log("users during email exists:", users);
     for ( let i = 0; i < keys.length; i++) {
       if ( users[keys[i]].email === email ) {
         return keys[i];
