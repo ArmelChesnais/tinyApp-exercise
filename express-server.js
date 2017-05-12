@@ -15,8 +15,9 @@ app.use(cookieParser());
 /*** DATA ***/
 
 let urlDatabase = {
-  "b2xVn2": "http://www.lighthouselabs.ca",
-  "9sm5xK": "http://www.google.com"
+  "b2xVn2": { shortURL: "b2xVn2", longURL: "http://www.lighthouselabs.ca", user_id: "userRandomID"},
+  "9sm5xK": { shortURL: "9sm5xK", longURL: "http://www.google.com", user_id: "user2RandomID"},
+
 };
 
 const users = {
@@ -62,7 +63,11 @@ app.get("/urls", (req, res) => {
 });
 
 app.get("/urls/new", (req, res) => {
-  res.render("urls_new", insertUser(req));
+  if ( utils.isLoggedIn(req.cookies.user_id) ) {
+    res.render("urls_new", insertUser(req));
+  } else {
+    res.status(403).redirect("/urls");
+  }
 });
 
 app.get("/register", (req, res) => {
@@ -87,7 +92,7 @@ app.get("/urls/:id", (req, res) => {
 });
 
 app.get("/u/:shortURL", (req, res) => {
-  let longURL = urlDatabase[req.params.shortURL]
+  let longURL = utils.getLongURL(req.params.shortURL);
   res.redirect(longURL);
 });
 
@@ -103,7 +108,13 @@ app.post("/urls/:id/delete", (req, res) => {
   if ( !urlDatabase[req.params.id] ){
     res.sendStatus(404);
   } else {
-    delete urlDatabase[req.params.id];
+    if ( !utils.isLoggedIn(req.cookies.user_id)){
+      res.status(401);
+    } else if ( utils.ownsURL(req.cookies.user_id, req.params.id) ) {
+      delete urlDatabase[req.params.id];
+    } else {
+      res.status(403);
+    }
     res.redirect("/urls", insertUser(req));
   }
 });
@@ -112,19 +123,29 @@ app.post("/urls/:id", (req, res) => {
   if ( !urlDatabase[req.params.id] ){
     res.sendStatus(404);
   } else {
-    urlDatabase[req.params.id] = req.body.longURL;
+    if ( !utils.isLoggedIn(req.cookies.user_id)){
+      res.status(401);
+    } else if ( utils.ownsURL(req.cookies.user_id, req.params.id) ) {
+      setURL(req.params.id, req.body.longURL);
+    } else {
+      res.status(403);
+    }
     res.redirect("/urls");
   }
 });
 
 app.post('/urls', (req, res) => {
-  let shortURL = generateRandomString();
-  urlDatabase[shortURL] = req.body.longURL;
-  res.location('/urls/' + shortURL);
-  res.status(303).send('Redirecting to short URL');
+  //let shortURL = generateRandomString();
+  if( utils.isLoggedIn(req.cookies.user_id) ) {
+    res.location('/urls/' + addURL(req, req.cookies.user_id));
+    res.status(303).send('Redirecting to short URL');
+  } else {
+    res.sendStatus(401);
+  }
 });
 
 app.post("/login", (req, res) => {
+  console.log(req.body);
   loginUser( res, req.body.email, req.body.password );
   res.redirect('/urls');
 });
@@ -134,7 +155,7 @@ app.post("/register", (req, res) => {
   let password = req.body.password;
   if ( !email || !password) {
     res.sendStatus(400);
-  } else if ( emailExists(email) ) {
+  } else if ( utils.emailExists(email) ) {
     res.sendStatus(400);
   } else {
     let id = addUser(email, password);
@@ -160,6 +181,16 @@ app.listen(PORT, () => {
 
 /*** MISC FUNCTIONS ***/
 
+function addURL ( req, owner_id ) {
+  let shortURL = generateRandomString();
+  urlDatabase[shortURL] = { id: shortURL, longURL: req.body.longURL, user_id: owner_id };
+  return shortURL;
+}
+
+function setURL ( shortURL, longURL ) {
+  urlDatabase[shortURL].longURL = longURL;
+}
+
 function generateRandomString() {
    return genRandStringLength(6);
 }
@@ -179,6 +210,7 @@ function insertUser( req, input ){
     result = input;
   }
   result["user"] = users[req.cookies.user_id];
+  result["utils"] = utils;
   return result;
 }
 
@@ -195,6 +227,16 @@ function addUser( email, password ){
   return id;
 }
 
+function isLoggedIn ( req ) {
+  if ( req.cookies.user_id ) {
+    let user_id = req.coo
+    if ( users[user_id] ) {
+      return user_id;
+    }
+  }
+  return false
+}
+
 function emailExists( email ) {
   let keys = Object.keys(users);
   for ( let i = 0; i < keys.length; i++) {
@@ -206,7 +248,7 @@ function emailExists( email ) {
 }
 
 function loginUser( res, email, password ) {
-  let id = authUser( email, password );
+  let id = utils.authUser( email, password );
   if( id ) {
     res.cookie('user_id', id);
   } else {
@@ -215,5 +257,62 @@ function loginUser( res, email, password ) {
 }
 
 function authUser( email, password ) {
-  return emailExists(email);
+  return utils.emailExists(email);
+}
+
+/*** TRANSFERRABLE FUNCTIONS ***/
+const utils = {
+
+  isLoggedIn: function ( user_id ) {
+    if ( user_id ) {
+      if ( users[user_id] ) {
+        return user_id;
+      }
+    }
+    return false;
+  },
+
+  emailExists: function( email ) {
+    let keys = Object.keys(users);
+    for ( let i = 0; i < keys.length; i++) {
+      if ( users[keys[i]].email === email ) {
+        return keys[i];
+      }
+    }
+    return false;
+  },
+
+  getUserId: function( email ) {
+    return emailExists( email );
+  },
+
+  getEmail: function( user_id ) {
+    return users
+  },
+
+  authUser: function( email, password ) {
+    let user_id = this.getUserId(email);
+    if ( users[user_id] && users[user_id].password === password) {
+      return user_id;
+    }
+    return false;
+  },
+
+  getLongURL: function( shortURL ) {
+    return urlDatabase[shortURL].longURL;
+  },
+
+  getOwner: function( shortURL ) {
+    console.log("urldatabase[short]", urlDatabase[shortURL]);
+    console.log("urlDatabase", urlDatabase);
+    return urlDatabase[shortURL].user_id;
+  },
+
+  ownsURL: function ( user_id, shortURL ) {
+    console.log("shirtURL:", shortURL);
+    if ( this.getOwner( shortURL ) === user_id) {
+      return user_id;
+    }
+    return false;
+  }
 }

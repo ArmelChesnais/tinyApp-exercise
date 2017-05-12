@@ -11,7 +11,7 @@
     <h2>ShortURL: <a href="/u/<%= shortURL %>"><%= shortURL %></a></h2>
 
     <form class="form-group input-group col-sm-6" method="POST" action="/urls/<%= shortURL %>">
-      <input class="form-control" name="longURL" value="<%= urls[shortURL] %>">
+      <input class="form-control" name="longURL" value="<%= utils.getLongURL(shortURL) %>">
       <div class="input-group-btn">
         <button type="submit" name="update" value="update" class="btn btn-default">update</button>
       </div>

@@ -7,20 +7,25 @@
   <div class="container">
     <% include ./partials/_navbar %>
     <div class="container">
+      <% if ( user ) { %>
       <table>
-        <% for (let key in urls) { %>
-        <div>
+        <% for (let key in urls) {
+             if ( user && utils.ownsURL(user.id, key)) { %>
           <tr>
             <td><%= key %></td>
-            <td> → <a href="<%= urls[key] %>"><%= urls[key] %></a></td>
+            <td> → <a href="/u/<%= key %>"><%= utils.getLongURL(key) %></a></td>
+
             <td><a class="btn btn-default" href="/urls/<%= key %>">Edit</a></td>
             <td><form class="delete-button" method="POST" action="/urls/<%= key %>/delete">
               <button type="submit" name="delete" value="delete" class="btn btn-default">Delete <img src="/icon/trash.png" width="18px"> </button>
             </form></td>
           </tr>
-        </div>
-        <% } %>
+          <% }
+           } %>
       </table>
+      <% } else { %>
+      <p>Please log in to see URLs</p>
+      <% } %>
     </div>
     <div class="container">
       <a class="btn btn-default" href="/urls/new">shorten URL</a>
